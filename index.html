@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ffffff">
+    <title>Image Inference PWA</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icon.png">
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/onnxjs@0.1.8/dist/onnx.min.js"></script>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+        <h1 class="text-2xl font-bold mb-4 text-center">Image Inference PWA</h1>
+        <div class="mb-4">
+            <button id="openCamera" class="bg-blue-500 text-white px-4 py-2 rounded w-full mb-2">Open Camera</button>
+            <input type="file" id="loadImage" accept="image/*" class="w-full mb-2">
+        </div>
+        <video id="video" class="w-full h-auto mb-4 hidden" autoplay></video>
+        <canvas id="canvas" class="w-full h-auto mb-4 hidden"></canvas>
+        <button id="capture" class="bg-green-500 text-white px-4 py-2 rounded w-full mb-2 hidden">Capture & Infer</button>
+        <div id="result" class="text-center"></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const captureButton = document.getElementById('capture');
+        const openCameraButton = document.getElementById('openCamera');
+        const loadImageInput = document.getElementById('loadImage');
+        const resultDiv = document.getElementById('result');
+        const ctx = canvas.getContext('2d');
+
+        let session;
+
+        // Load ONNX model
+        async function loadModel() {
+            try {
+                session = new onnx.InferenceSession();
+                // Replace with actual model URL or fetch from server
+                await session.loadModel('model.onnx');
+                console.log('Model loaded successfully');
+            } catch (error) {
+                console.error('Error loading model:', error);
+                resultDiv.textContent = 'Failed to load model';
+            }
+        }
+
+        // Start camera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                video.classList.remove('hidden');
+                captureButton.classList.remove('hidden');
+                canvas.classList.add('hidden');
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                resultDiv.textContent = 'Failed to access camera';
+            }
+        }
+
+        // Load image from file
+        function loadImageFromFile(file) {
+            const img = new Image();
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                video.classList.add('hidden');
+                canvas.classList.remove('hidden');
+                captureButton.classList.add('hidden');
+                runInference(img);
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        // Capture image from video
+        function captureImage() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            video.classList.add('hidden');
+            canvas.classList.remove('hidden');
+            captureButton.classList.add('hidden');
+            const img = new Image();
+            img.src = canvas.toDataURL('image/jpeg');
+            img.onload = () => runInference(img);
+        }
+
+        // Preprocess image for inference
+        function preprocessImage(img) {
+            const width = 224; // Adjust based on model input size
+            const height = 224;
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+            const imageData = ctx.getImageData(0, 0, width, height).data;
+            const input = new Float32Array(width * height * 3);
+            for (let i = 0, j = 0; i < imageData.length; i += 4, j += 3) {
+                input[j] = imageData[i] / 255.0;     // R
+                input[j + 1] = imageData[i + 1] / 255.0; // G
+                input[j + 2] = imageData[i + 2] / 255.0; // B
+            }
+            return input;
+        }
+
+        // Run inference
+        async function runInference(img) {
+            try {
+                resultDiv.textContent = 'Running inference...';
+                const input = preprocessImage(img);
+                const tensor = new onnx.Tensor(input, 'float32', [1, 3, 224, 224]); // Adjust shape as per model
+                const outputMap = await session.run([tensor]);
+                const output = outputMap.values().next().value.data;
+                // Process output (example: display top class)
+                const maxIndex = output.indexOf(Math.max(...output));
+                resultDiv.textContent = `Inference Result: Class ${maxIndex} (Confidence: ${output[maxIndex].toFixed(2)})`;
+                // Draw result on canvas
+                ctx.font = '20px Arial';
+                ctx.fillStyle = 'red';
+                ctx.fillText(`Class ${maxIndex}`, 10, 30);
+            } catch (error) {
+                console.error('Error running inference:', error);
+                resultDiv.textContent = 'Inference failed';
+            }
+        }
+
+        // Event listeners
+        openCameraButton.addEventListener('click', startCamera);
+        captureButton.addEventListener('click', captureImage);
+        loadImageInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) loadImageFromFile(e.target.files[0]);
+        });
+
+        // Initialize
+        loadModel();
+
+        // Register service worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.error('Service Worker registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>
