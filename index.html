@@ -33,6 +33,12 @@
     <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
         <h1 class="text-2xl font-bold mb-4 text-center">ALPR System</h1>
         
+        <!-- Security Context Warning -->
+        <div id="securityWarning" class="mb-4 p-2 bg-yellow-100 text-sm rounded hidden">
+            <p class="font-medium">Note: Camera access requires a secure context (HTTPS).</p>
+            <p>If you're seeing camera access issues, please make sure this app is served over HTTPS or from localhost.</p>
+        </div>
+        
         <!-- API Configuration -->
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 mb-1">API Endpoint:</label>
@@ -92,6 +98,11 @@
         // Start camera
         async function startCamera() {
             try {
+                // Check if mediaDevices is supported
+                if (!navigator.mediaDevices) {
+                    throw new Error("navigator.mediaDevices is undefined. This app must be run in a secure context (HTTPS or localhost).");
+                }
+                
                 const constraints = { 
                     video: { 
                         facingMode: "environment",
@@ -108,6 +119,13 @@
             } catch (error) {
                 console.error('Error accessing camera:', error);
                 statusDiv.textContent = 'Failed to access camera. ' + error.message;
+                
+                // Show a more user-friendly message about HTTPS requirement
+                if (error.message.includes('mediaDevices is undefined')) {
+                    statusDiv.innerHTML = 'Camera access requires HTTPS or localhost. <br>Please serve this app securely or use the file upload option instead.';
+                    // Show file upload option more prominently
+                    loadImageInput.classList.add('border', 'border-blue-500', 'p-1');
+                }
             }
         }
 
@@ -279,6 +297,23 @@
                     .catch(err => console.error('Service Worker registration failed:', err));
             });
         }
+
+        // Check if we're in a secure context
+        window.addEventListener('load', () => {
+            // Show warning if we're not on HTTPS or localhost
+            const securityWarning = document.getElementById('securityWarning');
+            
+            // Not in secure context or mediaDevices not available
+            if (!window.isSecureContext || !navigator.mediaDevices) {
+                securityWarning.classList.remove('hidden');
+                
+                // If we're not on localhost, show stronger warning
+                if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                    securityWarning.classList.add('bg-red-100');
+                    securityWarning.classList.remove('bg-yellow-100');
+                }
+            }
+        });
     </script>
 </body>
 </html>
