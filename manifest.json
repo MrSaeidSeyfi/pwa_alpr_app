@@ -1,10 +1,11 @@
 {
-    "name": "Image Inference PWA",
-    "short_name": "Inference PWA",
+    "name": "ALPR PWA",
+    "short_name": "ALPR",
     "start_url": "index.html",
     "display": "standalone",
     "background_color": "#ffffff",
     "theme_color": "#ffffff",
+    "description": "Automatic License Plate Recognition Progressive Web App",
     "icons": [
         {
             "src": "icon.png",

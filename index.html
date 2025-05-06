@@ -4,60 +4,110 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#ffffff">
-    <title>Image Inference PWA</title>
+    <title>ALPR PWA</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon.png">
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/onnxjs@0.1.8/dist/onnx.min.js"></script>
+    <script src="api-client.js"></script>
+    <style>
+        .bbox {
+            position: absolute;
+            border: 2px solid red;
+            pointer-events: none;
+        }
+        .plate-text {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 5px;
+            font-size: 14px;
+            border-radius: 2px;
+        }
+        .image-container {
+            position: relative;
+            display: inline-block;
+        }
+    </style>
 </head>
 <body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
     <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-        <h1 class="text-2xl font-bold mb-4 text-center">Image Inference PWA</h1>
+        <h1 class="text-2xl font-bold mb-4 text-center">ALPR System</h1>
+        
+        <!-- API Configuration -->
+        <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-1">API Endpoint:</label>
+            <input type="text" id="apiEndpoint" class="w-full p-2 border rounded" 
+                   value="http://192.168.137.249:8000/process_frame">
+        </div>
+        
+        <!-- Camera Controls -->
         <div class="mb-4">
             <button id="openCamera" class="bg-blue-500 text-white px-4 py-2 rounded w-full mb-2">Open Camera</button>
             <input type="file" id="loadImage" accept="image/*" class="w-full mb-2">
         </div>
-        <video id="video" class="w-full h-auto mb-4 hidden" autoplay></video>
-        <canvas id="canvas" class="w-full h-auto mb-4 hidden"></canvas>
-        <button id="capture" class="bg-green-500 text-white px-4 py-2 rounded w-full mb-2 hidden">Capture & Infer</button>
-        <div id="result" class="text-center"></div>
+        
+        <!-- Video & Canvas -->
+        <div class="image-container mb-4">
+            <video id="video" class="w-full h-auto mb-4 hidden" autoplay></video>
+            <canvas id="canvas" class="w-full h-auto mb-4 hidden"></canvas>
+            <!-- Bounding boxes will be added here dynamically -->
+        </div>
+        
+        <!-- Capture Button -->
+        <button id="capture" class="bg-green-500 text-white px-4 py-2 rounded w-full mb-2 hidden">
+            Capture & Process
+        </button>
+        
+        <!-- Processing Status -->
+        <div id="status" class="text-center mb-4"></div>
+        
+        <!-- Results Section -->
+        <div id="results" class="mt-4">
+            <h2 class="text-xl font-semibold mb-2 hidden" id="resultsHeader">Detection Results:</h2>
+            <div id="detectionResults" class="space-y-4"></div>
+        </div>
     </div>
 
     <script>
+        // DOM Elements
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const captureButton = document.getElementById('capture');
         const openCameraButton = document.getElementById('openCamera');
         const loadImageInput = document.getElementById('loadImage');
-        const resultDiv = document.getElementById('result');
+        const statusDiv = document.getElementById('status');
+        const resultsHeader = document.getElementById('resultsHeader');
+        const detectionResults = document.getElementById('detectionResults');
+        const apiEndpointInput = document.getElementById('apiEndpoint');
         const ctx = canvas.getContext('2d');
-
-        let session;
-
-        // Load ONNX model
-        async function loadModel() {
-            try {
-                session = new onnx.InferenceSession();
-                // Replace with actual model URL or fetch from server
-                await session.loadModel('model.onnx');
-                console.log('Model loaded successfully');
-            } catch (error) {
-                console.error('Error loading model:', error);
-                resultDiv.textContent = 'Failed to load model';
-            }
-        }
+        
+        // Initialize API Client
+        let apiClient = new AlprApiClient(apiEndpointInput.value);
+        
+        // Update API endpoint when changed
+        apiEndpointInput.addEventListener('change', () => {
+            apiClient = new AlprApiClient(apiEndpointInput.value);
+        });
 
         // Start camera
         async function startCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const constraints = { 
+                    video: { 
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 video.classList.remove('hidden');
                 captureButton.classList.remove('hidden');
                 canvas.classList.add('hidden');
+                clearResults();
             } catch (error) {
                 console.error('Error accessing camera:', error);
-                resultDiv.textContent = 'Failed to access camera';
+                statusDiv.textContent = 'Failed to access camera. ' + error.message;
             }
         }
 
@@ -71,7 +121,8 @@
                 video.classList.add('hidden');
                 canvas.classList.remove('hidden');
                 captureButton.classList.add('hidden');
-                runInference(img);
+                clearResults();
+                processImage(canvas);
             };
             img.src = URL.createObjectURL(file);
         }
@@ -83,48 +134,134 @@
             ctx.drawImage(video, 0, 0);
             video.classList.add('hidden');
             canvas.classList.remove('hidden');
-            captureButton.classList.add('hidden');
-            const img = new Image();
-            img.src = canvas.toDataURL('image/jpeg');
-            img.onload = () => runInference(img);
+            processImage(canvas);
         }
 
-        // Preprocess image for inference
-        function preprocessImage(img) {
-            const width = 224; // Adjust based on model input size
-            const height = 224;
-            canvas.width = width;
-            canvas.height = height;
-            ctx.drawImage(img, 0, 0, width, height);
-            const imageData = ctx.getImageData(0, 0, width, height).data;
-            const input = new Float32Array(width * height * 3);
-            for (let i = 0, j = 0; i < imageData.length; i += 4, j += 3) {
-                input[j] = imageData[i] / 255.0;     // R
-                input[j + 1] = imageData[i + 1] / 255.0; // G
-                input[j + 2] = imageData[i + 2] / 255.0; // B
-            }
-            return input;
-        }
-
-        // Run inference
-        async function runInference(img) {
+        // Process image with API
+        async function processImage(imageElement) {
             try {
-                resultDiv.textContent = 'Running inference...';
-                const input = preprocessImage(img);
-                const tensor = new onnx.Tensor(input, 'float32', [1, 3, 224, 224]); // Adjust shape as per model
-                const outputMap = await session.run([tensor]);
-                const output = outputMap.values().next().value.data;
-                // Process output (example: display top class)
-                const maxIndex = output.indexOf(Math.max(...output));
-                resultDiv.textContent = `Inference Result: Class ${maxIndex} (Confidence: ${output[maxIndex].toFixed(2)})`;
-                // Draw result on canvas
-                ctx.font = '20px Arial';
-                ctx.fillStyle = 'red';
-                ctx.fillText(`Class ${maxIndex}`, 10, 30);
+                statusDiv.textContent = 'Processing image...';
+                
+                // Send image to API
+                const response = await apiClient.processFrame(imageElement);
+                
+                if (!response) {
+                    statusDiv.textContent = 'Failed to process image. Check API connection.';
+                    return;
+                }
+                
+                // Parse API response
+                const vehicles = apiClient.parseResponse(response);
+                
+                // Display results
+                displayResults(vehicles, imageElement);
+                
+                statusDiv.textContent = vehicles.length > 0 ? 
+                    `Detected ${vehicles.length} vehicle(s)` : 
+                    'No vehicles detected';
+                    
             } catch (error) {
-                console.error('Error running inference:', error);
-                resultDiv.textContent = 'Inference failed';
+                console.error('Error during image processing:', error);
+                statusDiv.textContent = 'Processing failed: ' + error.message;
             }
+        }
+        
+        // Display detection results
+        function displayResults(vehicles, imageElement) {
+            clearResults();
+            
+            if (vehicles.length === 0) {
+                return;
+            }
+            
+            resultsHeader.classList.remove('hidden');
+            
+            // Get image container dimensions
+            const container = document.querySelector('.image-container');
+            const displayWidth = canvas.clientWidth;
+            const displayHeight = canvas.clientHeight;
+            const scaleX = displayWidth / canvas.width;
+            const scaleY = displayHeight / canvas.height;
+            
+            // Display each vehicle detection
+            vehicles.forEach((vehicle, index) => {
+                // Create result card
+                const card = document.createElement('div');
+                card.className = 'bg-gray-200 p-3 rounded';
+                
+                // Add plate number and confidence
+                const plateInfo = document.createElement('div');
+                plateInfo.className = 'text-lg font-bold';
+                plateInfo.textContent = `Plate: ${vehicle.plateText} (${(vehicle.plateConfidence * 100).toFixed(1)}%)`;
+                card.appendChild(plateInfo);
+                
+                // Add vehicle type
+                const vehicleType = document.createElement('div');
+                vehicleType.className = 'text-md';
+                vehicleType.textContent = `Type: ${vehicle.vehicleType} (${(vehicle.confidence * 100).toFixed(1)}%)`;
+                card.appendChild(vehicleType);
+                
+                // Add vehicle images if available
+                if (vehicle.vehicleImage) {
+                    const vehicleImg = document.createElement('img');
+                    vehicleImg.src = 'data:image/jpeg;base64,' + vehicle.vehicleImage;
+                    vehicleImg.className = 'mt-2 w-full';
+                    card.appendChild(vehicleImg);
+                }
+                
+                if (vehicle.plateImage) {
+                    const plateImg = document.createElement('img');
+                    plateImg.src = 'data:image/jpeg;base64,' + vehicle.plateImage;
+                    plateImg.className = 'mt-2 max-w-full h-12';
+                    card.appendChild(plateImg);
+                }
+                
+                // Add to results
+                detectionResults.appendChild(card);
+                
+                // Draw bounding box if available
+                if (vehicle.bbox && vehicle.bbox.length === 4) {
+                    const [x, y, width, height] = vehicle.bbox;
+                    drawBoundingBox(
+                        x * scaleX, 
+                        y * scaleY, 
+                        width * scaleX, 
+                        height * scaleY,
+                        vehicle.plateText
+                    );
+                }
+            });
+        }
+        
+        // Draw bounding box on image
+        function drawBoundingBox(x, y, width, height, text) {
+            const container = document.querySelector('.image-container');
+            
+            // Create bounding box element
+            const bbox = document.createElement('div');
+            bbox.className = 'bbox';
+            bbox.style.left = `${x}px`;
+            bbox.style.top = `${y}px`;
+            bbox.style.width = `${width}px`;
+            bbox.style.height = `${height}px`;
+            container.appendChild(bbox);
+            
+            // Create text label
+            const label = document.createElement('div');
+            label.className = 'plate-text';
+            label.style.left = `${x}px`;
+            label.style.top = `${y - 20}px`;
+            label.textContent = text;
+            container.appendChild(label);
+        }
+        
+        // Clear previous results
+        function clearResults() {
+            resultsHeader.classList.add('hidden');
+            detectionResults.innerHTML = '';
+            
+            // Remove any bounding boxes
+            document.querySelectorAll('.bbox, .plate-text').forEach(el => el.remove());
         }
 
         // Event listeners
@@ -133,9 +270,6 @@
         loadImageInput.addEventListener('change', (e) => {
             if (e.target.files[0]) loadImageFromFile(e.target.files[0]);
         });
-
-        // Initialize
-        loadModel();
 
         // Register service worker
         if ('serviceWorker' in navigator) {

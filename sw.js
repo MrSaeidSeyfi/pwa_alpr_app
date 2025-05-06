@@ -1,9 +1,10 @@
-const CACHE_NAME = 'image-inference-pwa-v1';
+const CACHE_NAME = 'alpr-pwa-v1';
 const urlsToCache = [
     '/',
     'index.html',
-    'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css',
-    'https://cdn.jsdelivr.net/npm/onnxjs@0.1.8/dist/onnx.min.js'
+    'api-client.js',
+    'manifest.json',
+    'https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css'
 ];
 
 self.addEventListener('install', event => {
