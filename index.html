@@ -3,81 +3,456 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#ffffff">
-    <title>ALPR PWA</title>
+    <meta name="theme-color" content="#4285f4">
+    <title>ALPR Camera PWA</title>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" href="icon.png">
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <script src="api-client.js"></script>
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        .header {
+            text-align: center;
+            grid-column: 1 / -1;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1.1rem;
+        }
+        
+        .camera-section {
+            position: relative;
+        }
+        
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .camera-icon {
+            width: 24px;
+            height: 24px;
+            fill: #4285f4;
+        }
+        
+        .api-config {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        
+        .api-config label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #555;
+        }
+        
+        .api-config input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+        
+        .api-config input:focus {
+            outline: none;
+            border-color: #4285f4;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #4285f4 0%, #3367d6 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(66, 133, 244, 0.3);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(66, 133, 244, 0.4);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, #34a853 0%, #137333 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(52, 168, 83, 0.3);
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52, 168, 83, 0.4);
+        }
+        
+        .file-upload {
+            margin-bottom: 20px;
+        }
+        
+        .file-upload input {
+            width: 100%;
+            padding: 12px;
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            background: #fafafa;
+            text-align: center;
+        }
+        
+        .video-container {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            margin-bottom: 20px;
+        }
+        
+        .video-container video,
+        .video-container canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
         .bbox {
             position: absolute;
-            border: 2px solid red;
+            border: 3px solid #ff4444;
             pointer-events: none;
+            box-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
         }
+        
         .plate-text {
             position: absolute;
-            background-color: rgba(0, 0, 0, 0.7);
+            background: rgba(255, 68, 68, 0.9);
             color: white;
-            padding: 2px 5px;
-            font-size: 14px;
-            border-radius: 2px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            white-space: nowrap;
         }
-        .image-container {
-            position: relative;
+        
+        .status {
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        .status.processing {
+            background: #e3f2fd;
+            color: #1976d2;
+            border: 1px solid #bbdefb;
+        }
+        
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+        
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+        
+        .status.warning {
+            background: #fff3e0;
+            color: #ef6c00;
+            border: 1px solid #ffcc02;
+        }
+        
+        .results-section {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .results-header {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .results-header.show {
+            display: flex;
+        }
+        
+        .vehicle-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border: 1px solid #dee2e6;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .vehicle-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .plate-number {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: #1976d2;
+        }
+        
+        .confidence {
+            background: #4285f4;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        
+        .vehicle-info {
+            margin-bottom: 16px;
+        }
+        
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #555;
+        }
+        
+        .info-value {
+            color: #333;
+        }
+        
+        .vehicle-images {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .image-item {
+            text-align: center;
+        }
+        
+        .image-item img {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .image-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        
+        .loading-spinner {
             display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .security-warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            border: 1px solid #ffeaa7;
+            display: none;
+        }
+        
+        .security-warning.show {
+            display: block;
+        }
+        
+        .warning-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+            
+            .vehicle-images {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
-<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-        <h1 class="text-2xl font-bold mb-4 text-center">ALPR System</h1>
-        
-        <!-- Security Context Warning -->
-        <div id="securityWarning" class="mb-4 p-2 bg-yellow-100 text-sm rounded hidden">
-            <p class="font-medium">Note: Camera access requires a secure context (HTTPS).</p>
-            <p>If you're seeing camera access issues, please make sure this app is served over HTTPS or from localhost.</p>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚗 ALPR Camera PWA</h1>
+            <p>Automatic License Plate Recognition with Live Camera</p>
         </div>
         
-        <!-- API Configuration -->
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">API Endpoint:</label>
-            <input type="text" id="apiEndpoint" class="w-full p-2 border rounded" 
-                   value="http://192.168.137.249:8000/process_frame">
+        <div class="card camera-section">
+            <h2 class="section-title">
+                <svg class="camera-icon" viewBox="0 0 24 24">
+                    <path d="M9,2V5H15V2H17V5H20A2,2 0 0,1 22,7V19A2,2 0 0,1 20,21H4A2,2 0 0,1 2,19V7A2,2 0 0,1 4,5H7V2H9M4,7V19H20V7H4M13.5,9A2.5,2.5 0 0,1 16,11.5A2.5,2.5 0 0,1 13.5,14A2.5,2.5 0 0,1 11,11.5A2.5,2.5 0 0,1 13.5,9Z"/>
+                </svg>
+                Camera & Settings
+            </h2>
+            
+            <div class="security-warning" id="securityWarning">
+                <div class="warning-title">⚠️ Security Notice</div>
+                <p>Camera access requires a secure context (HTTPS). If you're experiencing issues, please ensure this app is served over HTTPS or from localhost.</p>
+            </div>
+            
+            <div class="api-config">
+                <label for="apiEndpoint">🔗 API Endpoint:</label>
+                <input type="text" id="apiEndpoint" value="http://127.0.0.1:8000/api/process_frame_cmp" 
+                       placeholder="Enter your ALPR API endpoint">
+            </div>
+            
+            <div class="button-group">
+                <button id="openCamera" class="btn btn-primary">
+                    📷 Open Camera
+                </button>
+                <button id="capture" class="btn btn-success" style="display: none;">
+                    📸 Capture & Process
+                </button>
+            </div>
+            
+            <div class="file-upload">
+                <input type="file" id="loadImage" accept="image/*" 
+                       placeholder="Or select an image file...">
+            </div>
+            
+            <div class="video-container" id="videoContainer">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+            
+            <div id="status" class="status"></div>
         </div>
         
-        <!-- Camera Controls -->
-        <div class="mb-4">
-            <button id="openCamera" class="bg-blue-500 text-white px-4 py-2 rounded w-full mb-2">Open Camera</button>
-            <input type="file" id="loadImage" accept="image/*" class="w-full mb-2">
-        </div>
-        
-        <!-- Video & Canvas -->
-        <div class="image-container mb-4">
-            <video id="video" class="w-full h-auto mb-4 hidden" autoplay></video>
-            <canvas id="canvas" class="w-full h-auto mb-4 hidden"></canvas>
-            <!-- Bounding boxes will be added here dynamically -->
-        </div>
-        
-        <!-- Capture Button -->
-        <button id="capture" class="bg-green-500 text-white px-4 py-2 rounded w-full mb-2 hidden">
-            Capture & Process
-        </button>
-        
-        <!-- Processing Status -->
-        <div id="status" class="text-center mb-4"></div>
-        
-        <!-- Results Section -->
-        <div id="results" class="mt-4">
-            <h2 class="text-xl font-semibold mb-2 hidden" id="resultsHeader">Detection Results:</h2>
-            <div id="detectionResults" class="space-y-4"></div>
+        <div class="card results-section">
+            <h2 class="results-header" id="resultsHeader">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,16.5L6.5,12L7.91,10.59L11,13.67L16.59,8.09L18,9.5L11,16.5Z"/>
+                </svg>
+                Detection Results
+            </h2>
+            <div id="detectionResults">
+                <div style="text-align: center; color: #666; padding: 40px 20px;">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="#ccc" style="margin-bottom: 16px;">
+                        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M7,13H17V11H7"/>
+                    </svg>
+                    <p>No results yet. Capture a frame to see ALPR results.</p>
+                </div>
+            </div>
         </div>
     </div>
 
+    <script src="api-client.js"></script>
     <script>
         // DOM Elements
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
+        const videoContainer = document.getElementById('videoContainer');
         const captureButton = document.getElementById('capture');
         const openCameraButton = document.getElementById('openCamera');
         const loadImageInput = document.getElementById('loadImage');
@@ -85,13 +460,14 @@
         const resultsHeader = document.getElementById('resultsHeader');
         const detectionResults = document.getElementById('detectionResults');
         const apiEndpointInput = document.getElementById('apiEndpoint');
+        const securityWarning = document.getElementById('securityWarning');
         const ctx = canvas.getContext('2d');
         
         // Initialize API Client
         let apiClient = new AlprApiClient(apiEndpointInput.value);
         
         // Update API endpoint when changed
-        apiEndpointInput.addEventListener('change', () => {
+        apiEndpointInput.addEventListener('input', () => {
             apiClient = new AlprApiClient(apiEndpointInput.value);
         });
 
@@ -103,6 +479,8 @@
                     throw new Error("navigator.mediaDevices is undefined. This app must be run in a secure context (HTTPS or localhost).");
                 }
                 
+                showStatus('Requesting camera access...', 'processing');
+                
                 const constraints = { 
                     video: { 
                         facingMode: "environment",
@@ -110,21 +488,22 @@
                         height: { ideal: 720 }
                     } 
                 };
+                
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
-                video.classList.remove('hidden');
-                captureButton.classList.remove('hidden');
-                canvas.classList.add('hidden');
+                video.style.display = 'block';
+                canvas.style.display = 'none';
+                captureButton.style.display = 'inline-block';
+                openCameraButton.innerHTML = '🔄 Switch Camera';
                 clearResults();
+                showStatus('Camera ready! Click "Capture & Process" to analyze frames.', 'success');
+                
             } catch (error) {
                 console.error('Error accessing camera:', error);
-                statusDiv.textContent = 'Failed to access camera. ' + error.message;
+                showStatus(`Failed to access camera: ${error.message}`, 'error');
                 
-                // Show a more user-friendly message about HTTPS requirement
                 if (error.message.includes('mediaDevices is undefined')) {
-                    statusDiv.innerHTML = 'Camera access requires HTTPS or localhost. <br>Please serve this app securely or use the file upload option instead.';
-                    // Show file upload option more prominently
-                    loadImageInput.classList.add('border', 'border-blue-500', 'p-1');
+                    securityWarning.classList.add('show');
                 }
             }
         }
@@ -136,9 +515,9 @@
                 canvas.width = img.width;
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
-                video.classList.add('hidden');
-                canvas.classList.remove('hidden');
-                captureButton.classList.add('hidden');
+                video.style.display = 'none';
+                canvas.style.display = 'block';
+                captureButton.style.display = 'none';
                 clearResults();
                 processImage(canvas);
             };
@@ -147,24 +526,29 @@
 
         // Capture image from video
         function captureImage() {
+            if (video.videoWidth === 0 || video.videoHeight === 0) {
+                showStatus('Video not ready. Please wait a moment and try again.', 'warning');
+                return;
+            }
+            
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
-            video.classList.add('hidden');
-            canvas.classList.remove('hidden');
+            video.style.display = 'none';
+            canvas.style.display = 'block';
             processImage(canvas);
         }
 
         // Process image with API
         async function processImage(imageElement) {
             try {
-                statusDiv.textContent = 'Processing image...';
+                showStatus('Processing image... <span class="loading-spinner"></span>', 'processing');
                 
                 // Send image to API
                 const response = await apiClient.processFrame(imageElement);
                 
                 if (!response) {
-                    statusDiv.textContent = 'Failed to process image. Check API connection.';
+                    showStatus('Failed to process image. Please check your API connection and endpoint.', 'error');
                     return;
                 }
                 
@@ -174,13 +558,15 @@
                 // Display results
                 displayResults(vehicles, imageElement);
                 
-                statusDiv.textContent = vehicles.length > 0 ? 
-                    `Detected ${vehicles.length} vehicle(s)` : 
-                    'No vehicles detected';
+                if (vehicles.length > 0) {
+                    showStatus(`✅ Successfully detected ${vehicles.length} vehicle(s)!`, 'success');
+                } else {
+                    showStatus('No vehicles detected in this image.', 'warning');
+                }
                     
             } catch (error) {
                 console.error('Error during image processing:', error);
-                statusDiv.textContent = 'Processing failed: ' + error.message;
+                showStatus(`Processing failed: ${error.message}`, 'error');
             }
         }
         
@@ -189,53 +575,72 @@
             clearResults();
             
             if (vehicles.length === 0) {
+                detectionResults.innerHTML = `
+                    <div style="text-align: center; color: #666; padding: 40px 20px;">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="#ffc107" style="margin-bottom: 16px;">
+                            <path d="M1,21H23L12,2L1,21Z"/>
+                        </svg>
+                        <p>No vehicles were detected in this image.</p>
+                        <p style="font-size: 0.9rem; margin-top: 8px;">Try capturing a clearer image with visible license plates.</p>
+                    </div>
+                `;
                 return;
             }
             
-            resultsHeader.classList.remove('hidden');
+            resultsHeader.classList.add('show');
             
-            // Get image container dimensions
-            const container = document.querySelector('.image-container');
+            // Get image container dimensions for bounding box scaling
             const displayWidth = canvas.clientWidth;
             const displayHeight = canvas.clientHeight;
             const scaleX = displayWidth / canvas.width;
             const scaleY = displayHeight / canvas.height;
             
+            let html = '';
+            
             // Display each vehicle detection
             vehicles.forEach((vehicle, index) => {
-                // Create result card
-                const card = document.createElement('div');
-                card.className = 'bg-gray-200 p-3 rounded';
-                
-                // Add plate number and confidence
-                const plateInfo = document.createElement('div');
-                plateInfo.className = 'text-lg font-bold';
-                plateInfo.textContent = `Plate: ${vehicle.plateText} (${(vehicle.plateConfidence * 100).toFixed(1)}%)`;
-                card.appendChild(plateInfo);
-                
-                // Add vehicle type
-                const vehicleType = document.createElement('div');
-                vehicleType.className = 'text-md';
-                vehicleType.textContent = `Type: ${vehicle.vehicleType} (${(vehicle.confidence * 100).toFixed(1)}%)`;
-                card.appendChild(vehicleType);
-                
-                // Add vehicle images if available
-                if (vehicle.vehicleImage) {
-                    const vehicleImg = document.createElement('img');
-                    vehicleImg.src = 'data:image/jpeg;base64,' + vehicle.vehicleImage;
-                    vehicleImg.className = 'mt-2 w-full';
-                    card.appendChild(vehicleImg);
-                }
-                
-                if (vehicle.plateImage) {
-                    const plateImg = document.createElement('img');
-                    plateImg.src = 'data:image/jpeg;base64,' + vehicle.plateImage;
-                    plateImg.className = 'mt-2 max-w-full h-12';
-                    card.appendChild(plateImg);
-                }
-                
-                // Add to results
-                detectionResults.appendChild(card);
+                html += `
+                    <div class="vehicle-card">
+                        <div class="vehicle-header">
+                            <div class="plate-number">${vehicle.plateText || 'Unknown Plate'}</div>
+                            <div class="confidence">${(vehicle.plateConfidence * 100).toFixed(1)}%</div>
+                        </div>
+                        
+                        <div class="vehicle-info">
+                            <div class="info-row">
+                                <span class="info-label">🚗 Vehicle Type:</span>
+                                <span class="info-value">${vehicle.vehicleType || 'Unknown'}</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">🎯 Vehicle Confidence:</span>
+                                <span class="info-value">${(vehicle.confidence * 100).toFixed(1)}%</span>
+                            </div>
+                            ${vehicle.bbox && vehicle.bbox.length === 4 ? `
+                                <div class="info-row">
+                                    <span class="info-label">📍 Position:</span>
+                                    <span class="info-value">[${vehicle.bbox.map(v => Math.round(v)).join(', ')}]</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                        
+                        ${(vehicle.vehicleImage || vehicle.plateImage) ? `
+                            <div class="vehicle-images">
+                                ${vehicle.vehicleImage ? `
+                                    <div class="image-item">
+                                        <div class="image-label">Vehicle Image</div>
+                                        <img src="data:image/jpeg;base64,${vehicle.vehicleImage}" alt="Vehicle">
+                                    </div>
+                                ` : ''}
+                                ${vehicle.plateImage ? `
+                                    <div class="image-item">
+                                        <div class="image-label">License Plate</div>
+                                        <img src="data:image/jpeg;base64,${vehicle.plateImage}" alt="License Plate">
+                                    </div>
+                                ` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
                 
                 // Draw bounding box if available
                 if (vehicle.bbox && vehicle.bbox.length === 4) {
@@ -245,16 +650,16 @@
                         y * scaleY, 
                         width * scaleX, 
                         height * scaleY,
-                        vehicle.plateText
+                        vehicle.plateText || `Vehicle ${index + 1}`
                     );
                 }
             });
+            
+            detectionResults.innerHTML = html;
         }
         
         // Draw bounding box on image
         function drawBoundingBox(x, y, width, height, text) {
-            const container = document.querySelector('.image-container');
-            
             // Create bounding box element
             const bbox = document.createElement('div');
             bbox.className = 'bbox';
@@ -262,56 +667,54 @@
             bbox.style.top = `${y}px`;
             bbox.style.width = `${width}px`;
             bbox.style.height = `${height}px`;
-            container.appendChild(bbox);
+            videoContainer.appendChild(bbox);
             
             // Create text label
             const label = document.createElement('div');
             label.className = 'plate-text';
             label.style.left = `${x}px`;
-            label.style.top = `${y - 20}px`;
+            label.style.top = `${Math.max(0, y - 25)}px`;
             label.textContent = text;
-            container.appendChild(label);
+            videoContainer.appendChild(label);
         }
         
-        // Clear previous results
+        // Clear previous results and bounding boxes
         function clearResults() {
-            resultsHeader.classList.add('hidden');
-            detectionResults.innerHTML = '';
+            resultsHeader.classList.remove('show');
             
             // Remove any bounding boxes
             document.querySelectorAll('.bbox, .plate-text').forEach(el => el.remove());
+        }
+        
+        // Show status message
+        function showStatus(message, type) {
+            statusDiv.innerHTML = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
         }
 
         // Event listeners
         openCameraButton.addEventListener('click', startCamera);
         captureButton.addEventListener('click', captureImage);
         loadImageInput.addEventListener('change', (e) => {
-            if (e.target.files[0]) loadImageFromFile(e.target.files[0]);
+            if (e.target.files[0]) {
+                loadImageFromFile(e.target.files[0]);
+            }
         });
 
         // Register service worker
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('Service Worker registered'))
-                    .catch(err => console.error('Service Worker registration failed:', err));
+                    .then(reg => console.log('✅ Service Worker registered successfully'))
+                    .catch(err => console.error('❌ Service Worker registration failed:', err));
             });
         }
 
-        // Check if we're in a secure context
+        // Check security context on load
         window.addEventListener('load', () => {
-            // Show warning if we're not on HTTPS or localhost
-            const securityWarning = document.getElementById('securityWarning');
-            
-            // Not in secure context or mediaDevices not available
             if (!window.isSecureContext || !navigator.mediaDevices) {
-                securityWarning.classList.remove('hidden');
-                
-                // If we're not on localhost, show stronger warning
-                if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-                    securityWarning.classList.add('bg-red-100');
-                    securityWarning.classList.remove('bg-yellow-100');
-                }
+                securityWarning.classList.add('show');
             }
         });
     </script>
